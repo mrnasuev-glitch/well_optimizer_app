@@ -1,6 +1,7 @@
-streamlit 
-pandas 
-numpy 
-plotly 
-scipy 
+streamlit
+pandas
+numpy
+plotly
 openpyxl
+scipy
+extra-streamlit-components
