@@ -234,9 +234,9 @@ def save_data_to_file():
             # Данные скважин и кустов
             'wells_data': st.session_state.get('wells_data', []),
             'clusters': st.session_state.get('clusters', {}),
-            'selected_cits': st.session_state.get('selected_cits', 'ЦИТС Повх'),
+            'selected_cits': st.session_state.get('selected_cits', 'ЦИТС VQ-BAD'),
             'selected_cdng': st.session_state.get('selected_cdng', 'ЦДНГ-1'),
-            'selected_tpp': st.session_state.get('selected_tpp', 'Повхнефтегаз'),
+            'selected_tpp': st.session_state.get('selected_tpp', 'VQ-BADнефтегаз'),
             'selected_cluster': st.session_state.get('selected_cluster', None),
         }
         
@@ -462,8 +462,8 @@ def clear_all_data():
     st.session_state.calculation_history = []
     st.session_state.selected_cdng = "ЦДНГ-3"
     st.session_state.selected_cluster = None
-    st.session_state.selected_cits = "ЦИТС Повх"
-    st.session_state.selected_tpp = "Повхнефтегаз"
+    st.session_state.selected_cits = "ЦИТС VQ-BAD"
+    st.session_state.selected_tpp = "VQ-BADнефтегаз"
     
     # Очищаем все результаты расчетов
     st.session_state.last_optimization = None
@@ -734,7 +734,7 @@ def find_clusters_with_multiple_kpr_wells(wells_data, min_kpr_count=2):
         if not well.get('is_active', True):
             continue
             
-        cits = well.get('cits', 'ЦИТС Повх')
+        cits = well.get('cits', 'ЦИТС VQ-BAD')
         cdng = well.get('cdng', 'ЦДНГ-1')
         cluster = well.get('cluster', 'Неизвестно')
         
@@ -3218,19 +3218,19 @@ class SystemLoadOptimizer:
 def parse_cdng_cits(cdng_value, default_cits=None):
     """Парсим ЦДНГ и ЦИТС из значения типа 'ЦДНГ-1 (В)'"""
     if not isinstance(cdng_value, str):
-        return "ЦДНГ-1", default_cits or "ЦИТС Повх"
+        return "ЦДНГ-1", default_cits or "ЦИТС VQ-BAD"
     
     cdng_value = str(cdng_value).strip()
     
     # Определяем ЦИТС по букве в скобках
     cits_map = {
-        'В': 'ЦИТС Ватьеган',
-        'П': 'ЦИТС Повх'
+        'В': 'ЦИТС Аган',
+        'П': 'ЦИТС VQ-BAD'
     }
     
     # По умолчанию
     cdng = cdng_value
-    cits = default_cits or "ЦИТС Повх"
+    cits = default_cits or "ЦИТС VQ-BAD"
     
     # Ищем букву в скобках
     if '(' in cdng_value and ')' in cdng_value:
@@ -3589,7 +3589,7 @@ def load_tech_regime_file(uploaded_file, selected_cits=None):
                     'exclude_from_shift': False,
                     
                     # Иерархия
-                    'tpp': 'Повхнефтегаз',
+                    'tpp': 'VQ-BADнефтегаз',
                     'cits': cits,
                     'cdng': cdng,
                     
@@ -3691,7 +3691,7 @@ def update_structure_from_wells(wells_data):
     clusters = {}
     
     for well in wells_data:
-        cits = well.get('cits', 'ЦИТС Повх')
+        cits = well.get('cits', 'ЦИТС VQ-BAD')
         cdng = well.get('cdng', 'ЦДНГ-1')
         cluster = well.get('cluster', 'Неизвестно')
         
@@ -4890,7 +4890,7 @@ def show_tm_import_tab():
         return ""
     
     # ========== ШАГ 1: Выбор ЦИТС ==========
-    cits_options = ["ЦИТС Повх", "ЦИТС Ватьеган"]
+    cits_options = ["ЦИТС VQ-BAD", "ЦИТС Аган"]
     selected_cits = st.radio(
         "Выберите ЦИТС для импорта:",
         cits_options,
@@ -4905,7 +4905,7 @@ def show_tm_import_tab():
     st.markdown("### 📥 Этап 1: Импорт уставок (время работы/накопления)")
     st.info("""
     **Формат файла для уставок:**
-    - Столбец A: составная строка (Ватьеганское.ЦДНГ-1-2.Куст-24.АГЗУ-1.Скв-2053Л.СУ-2053Л.)
+    - Столбец A: составная строка (Аганское.ЦДНГ-1-2.Куст-24.АГЗУ-1.Скв-2053Л.СУ-2053Л.)
     - Столбец B: время работы (первая строка - число)
     - Столбец C: время накопления (первая строка - число)
     
@@ -5130,7 +5130,7 @@ def show_tm_import_tab():
     else:
         st.info("""
         **Формат файла для времени запуска:**
-        - Столбец A: составная строка (Ватьеганское.ЦДНГ-1-2.Куст-24.АГЗУ-1.Скв-2053Л.СУ-2053Л.)
+        - Столбец A: составная строка (Аганское.ЦДНГ-1-2.Куст-24.АГЗУ-1.Скв-2053Л.СУ-2053Л.)
         - Столбец B: ячейка с временем запуска (например: "10\\n26.02.2026 13:06:13")
         
         **Результат:** Столбцы C(ЦДНГ), D(Куст), E(Скважина), F(Время запуска)
@@ -5433,10 +5433,10 @@ def show_wells_management_tab():
     
     col_h1, col_h2, col_h3 = st.columns(3)
     with col_h1:
-        st.info(f"**ТПП:** {st.session_state.get('selected_tpp', 'Повхнефтегаз')}")
+        st.info(f"**ТПП:** {st.session_state.get('selected_tpp', 'VQ-BADнефтегаз')}")
     with col_h2:
         # ВЫБОР ЦИТС
-        cits_options = ["ЦИТС Повх", "ЦИТС Ватьеган"]
+        cits_options = ["ЦИТС VQ-BAD", "ЦИТС Аган"]
         selected_cits = st.selectbox(
             "ЦИТС",
             cits_options,
@@ -5853,7 +5853,7 @@ def show_import_tab():
     """)
     
     # Выбор ЦИТС для импорта
-    cits_options = ["ЦИТС Повх", "ЦИТС Ватьеган"]
+    cits_options = ["ЦИТС VQ-BAD", "ЦИТС Аган"]
     import_cits = st.selectbox(
         "Выберите ЦИТС для импорта",
         cits_options,
@@ -5895,7 +5895,7 @@ def show_import_tab():
                 # Группируем по ЦИТС и ЦДНГ
                 cits_data = {}
                 for well in wells_data:
-                    cits = well.get('cits', 'ЦИТС Повх')
+                    cits = well.get('cits', 'ЦИТС VQ-BAD')
                     cdng = well.get('cdng', 'ЦДНГ-1')
                     
                     if cits not in cits_data:
@@ -6007,13 +6007,13 @@ def show_optimization_tab():
         
         cits_list = []
         for well in wells_data:
-            cits = well.get('cits', 'ЦИТС Повх')
+            cits = well.get('cits', 'ЦИТС VQ-BAD')
             if cits and cits not in cits_list:
                 cits_list.append(cits)
         
         # Если нет данных, используем значения по умолчанию
         if not cits_list:
-            cits_list = ["ЦИТС Повх", "ЦИТС Ватьеган"]
+            cits_list = ["ЦИТС VQ-BAD", "ЦИТС Аган"]
         
         # Используем уникальный ключ для этого выбора
         selected_cits = st.selectbox(
@@ -6028,7 +6028,7 @@ def show_optimization_tab():
         # Получаем ЦДНГ для выбранного ЦИТС
         cdng_list = []
         for well in wells_data:
-            if well.get('cits', 'ЦИТС Повх') == selected_cits and well.get('cdng'):
+            if well.get('cits', 'ЦИТС VQ-BAD') == selected_cits and well.get('cdng'):
                 if well['cdng'] not in cdng_list:
                     cdng_list.append(well['cdng'])
         
@@ -6116,7 +6116,7 @@ def show_optimization_tab():
     if selected_cluster and selected_cluster != "-- Выберите куст --":
         # Фильтруем скважины по выбранным ЦИТС, ЦДНГ и кусту
         current_wells = [w for w in st.session_state.get('wells_data', []) 
-                       if w.get('cits', 'ЦИТС Повх') == selected_cits and
+                       if w.get('cits', 'ЦИТС VQ-BAD') == selected_cits and
                        w.get('cdng') == selected_cdng and 
                        w.get('cluster') == selected_cluster]
         
@@ -6336,7 +6336,7 @@ def show_optimization_tab():
                 
                 if st.button("📊 Создать детальный отчет в Excel", use_container_width=True):
                     # Добавляем дополнительную информацию для отчета
-                    results['tpp'] = st.session_state.get('selected_tpp', 'Повхнефтегаз')
+                    results['tpp'] = st.session_state.get('selected_tpp', 'VQ-BADнефтегаз')
                     results['timestamp'] = datetime.now()
                     results['current_time'] = current_time
                     
@@ -10321,7 +10321,7 @@ def show_kpr_potential_tab_corrected():
     col_select1, col_select2 = st.columns(2)
     
     with col_select1:
-        cits_list = list(set([w.get('cits', 'ЦИТС Повх') for w in kpr_wells]))
+        cits_list = list(set([w.get('cits', 'ЦИТС VQ-BAD') for w in kpr_wells]))
         selected_cits = st.selectbox("Выберите ЦИТС", cits_list, key="kpr_cits_select_corrected")
         DEBUG.data("Выбран ЦИТС", selected_cits)
     
@@ -12932,7 +12932,7 @@ def show_pump_conversion_system():
         return
     
     # Фильтр по ЦИТС
-    cits_list = list(set([w.get('cits', 'ЦИТС Повх') for w in filtered_by_mode]))
+    cits_list = list(set([w.get('cits', 'ЦИТС VQ-BAD') for w in filtered_by_mode]))
     selected_cits = st.selectbox("Выберите ЦИТС", cits_list, key=f"cits_{current_tab}")
     
     # Применяем все фильтры
@@ -12950,7 +12950,7 @@ def show_pump_conversion_system():
     }
     
     for w in filtered_by_mode:
-        if w.get('cits', 'ЦИТС Повх') != selected_cits:
+        if w.get('cits', 'ЦИТС VQ-BAD') != selected_cits:
             continue
             
         filter_stats['total'] += 1
@@ -13834,8 +13834,8 @@ def create_pressure_stabilization_report(optimization_result):
         
         # Информация об объекте
         data_summary = [
-            ["Объект:", f"ТПП '{optimization_result.get('tpp', 'Повхнефтегаз')}'"],
-            ["ЦИТС:", optimization_result.get('cits', 'ЦИТС Повх')],
+            ["Объект:", f"ТПП '{optimization_result.get('tpp', 'VQ-BADнефтегаз')}'"],
+            ["ЦИТС:", optimization_result.get('cits', 'ЦИТС VQ-BAD')],
             ["ЦДНГ:", optimization_result.get('cdng', 'ЦДНГ-1')],
             ["Куст:", optimization_result.get('cluster', 'Не указан')],
             ["Дата расчета:", optimization_result['timestamp'].strftime("%d.%m.%Y %H:%M")],
@@ -14508,7 +14508,7 @@ def create_ecn_replacement_report(calculation_results, params):
         avg_kpr_hours = sum(r['Время работы КПР, ч/сут'] for r in calculation_results) / total_wells
         
         summary_data = [
-            ["ЦИТС:", params.get('cits', 'Повх')],
+            ["ЦИТС:", params.get('cits', 'VQ-BAD')],
             ["Дата расчета:", datetime.now().strftime("%d.%m.%Y %H:%M")],
             ["Количество скважин:", total_wells],
             ["", ""],
@@ -14790,8 +14790,8 @@ def create_comprehensive_report(all_results):
         
         summary_data = [
             ["Дата составления:", current_date],
-            ["Объект:", all_results.get('tpp', 'ТПП "Повхнефтегаз"')],
-            ["ЦИТС:", all_results.get('cits', 'ЦИТС Повх')],
+            ["Объект:", all_results.get('tpp', 'ТПП "VQ-BADнефтегаз"')],
+            ["ЦИТС:", all_results.get('cits', 'ЦИТС VQ-BAD')],
             ["", ""],
             ["ОБЩАЯ СТАТИСТИКА:", ""],
         ]
@@ -15237,7 +15237,7 @@ def show_pressure_stabilization_reports():
         with st.spinner("Создание отчета..."):
             try:
                 # Добавляем дополнительную информацию
-                result['tpp'] = st.session_state.get('selected_tpp', 'Повхнефтегаз')
+                result['tpp'] = st.session_state.get('selected_tpp', 'VQ-BADнефтегаз')
                 
                 # Создаем отчет
                 excel_file = create_pressure_stabilization_report(result)
@@ -15638,8 +15638,8 @@ def show_comprehensive_reports():
     
     # Собираем данные для отчета
     all_results = {
-        'tpp': st.session_state.get('selected_tpp', 'ТПП "Повхнефтегаз"'),
-        'cits': st.session_state.get('selected_cits', 'ЦИТС Повх'),
+        'tpp': st.session_state.get('selected_tpp', 'ТПП "VQ-BADнефтегаз"'),
+        'cits': st.session_state.get('selected_cits', 'ЦИТС VQ-BAD'),
         'generated_date': datetime.now().strftime("%d.%m.%Y %H:%M")
     }
     
@@ -18528,8 +18528,8 @@ def main():
             'calculation_history': [],
             'selected_cdng': "ЦДНГ-3",
             'selected_cluster': None,
-            'selected_tpp': "Повхнефтегаз",
-            'selected_cits': "ЦИТС Повх",
+            'selected_tpp': "VQ-BADнефтегаз",
+            'selected_cits': "ЦИТС VQ-BAD",
             'current_page': "dashboard",
             'editing_mode': False,
             'show_results': False,
@@ -18738,7 +18738,6 @@ def main():
     st.markdown("""
     <div style='text-align: center; color: #666; padding: 20px;'>
         <p>🛢️ <b>PovhEquilibrium</b> | Система оптимизации скважин</p>
-        <p><small>ООО "ЛУКОЙЛ-Западная Сибирь" | ТПП "Повхнефтегаз" | Группа оптимизации добычи</small></p>
     </div>
     """, unsafe_allow_html=True)
 
