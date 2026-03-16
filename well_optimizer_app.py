@@ -12337,90 +12337,48 @@ def show_pump_conversion_system():
             # 2. Требуемый напор для нового насоса
             required_head_new = calculate_head_for_new_pump(dyn_level_new, buffer_pressure)
             
-            # 3. ИСПРАВЛЕНИЕ: Определяем напор для расчета
-            current_pump_mark = well.get('pump_mark', '')
-            _, current_pump_head_nominal = extract_pump_parameters(current_pump_mark)
+            # ========== НОВАЯ ЛОГИКА ВЫБОРА НАПОРА (ОКРУГЛЕНИЕ ВВЕРХ) ==========
+            # Правила:
+            # 1. Рассчитываем требуемый напор required_head_new
+            # 2. Округляем его ВСЕГДА ВВЕРХ до ближайших 100 метров
+            #    1342 → 1400, 1201 → 1300, 1001 → 1100
+            # 3. Используем округленный напор для расчета числа ступеней
             
-            # Если нет текущего напора, используем значение по умолчанию
-            if current_pump_head_nominal is None or current_pump_head_nominal <= 0:
-                current_pump_head_nominal = 1500
-            
-            # ПОЛУЧАЕМ РЕАЛЬНУЮ ЧАСТОТУ СТАРОГО НАСОСА
-            freq_old_hz = get_frequency_hz_safe(well)  # ← ЭТА ФУНКЦИЯ УЖЕ ЕСТЬ В ВАШЕМ КОДЕ
-            
-            if pump_selection_mode == "Автоматический" and current_pump_head_nominal:
-                # В автоматическом режиме используем напор старого насоса
-                pump_head_to_use = current_pump_head_nominal
-            elif new_pump_head is not None:
-                # В ручном режиме используем переданный напор
-                pump_head_to_use = new_pump_head
+            if required_head_new > 0:
+                # Округляем ВВЕРХ до ближайших 100 метров
+                # Формула: ceil(число / 100) * 100
+                rounded_head = math.ceil(required_head_new / 100) * 100
+                
+                # Проверяем минимальный и максимальный напор
+                if rounded_head < 300:
+                    rounded_head = 300  # Минимальный напор для ЭЦН
+                    head_selection_reason = f"Требуемый напор {required_head_new:.0f} м → скорректирован до минимума {rounded_head} м"
+                elif rounded_head > 3000:
+                    rounded_head = 3000  # Максимальный напор
+                    head_selection_reason = f"Требуемый напор {required_head_new:.0f} м → скорректирован до максимума {rounded_head} м"
+                else:
+                    head_selection_reason = f"Требуемый напор {required_head_new:.0f} м → округлен вверх до {rounded_head} м (+{rounded_head - required_head_new:.0f} м)"
+                
+                pump_head_to_use = rounded_head
             else:
-                # Если ничего не подошло, используем значение по умолчанию
+                # Если не удалось рассчитать требуемый напор, используем напор по умолчанию
                 pump_head_to_use = 1500
+                head_selection_reason = "Не удалось рассчитать требуемый напор, используется 1500 м"
             
-            # 4. Характеристики нового насоса
+            # 3. Характеристики нового насоса
             stage_data_new = STAGE_DATA[new_pump_type]
             nominal_q_new = PUMP_NOMINAL_FLOWS.get(new_pump_type, 125)
             
             H_stage_new = interpolate(nominal_q_new, stage_data_new, 1)
             N_stage_new = interpolate(nominal_q_new, stage_data_new, 2)
             
-            # ========== ИСПРАВЛЕННАЯ ЛОГИКА ВЫБОРА НАПОРА ==========
-            # Правила с УЧЕТОМ ЧАСТОТЫ:
-            # 1. Пересчитываем старый напор на реальную частоту: H_old_real = H_old_nominal * (f_old/50)^2
-            # 2. Напор нового насоса должен быть НЕ МЕНЬШЕ требуемого
-            # 3. Если разница между пересчитанным старым и требуемым > 300 м - оставляем старый (НОМИНАЛЬНЫЙ!)
-            # 4. Иначе используем требуемый напор
-            
-            # Сохраняем исходный напор для отладки
-            original_pump_head = pump_head_to_use
-            head_selection_reason = ""
-            
-            if required_head_new > 0:
-                # ПЕРЕСЧИТЫВАЕМ СТАРЫЙ НАПОР С УЧЕТОМ ЧАСТОТЫ
-                # H ~ f^2
-                freq_ratio_old = (freq_old_hz / 50.0) ** 2
-                current_pump_head_real = current_pump_head_nominal * freq_ratio_old
-                
-                # Логирование для отладки
-                head_debug = {
-                    'номинальный': current_pump_head_nominal,
-                    'частота': freq_old_hz,
-                    'коэффициент': freq_ratio_old,
-                    'реальный': current_pump_head_real,
-                    'требуемый': required_head_new
-                }
-                
-                # Случай 1: Требуемый напор БОЛЬШЕ реального напора старого насоса
-                if required_head_new > current_pump_head_real:
-                    pump_head_to_use = current_pump_head_nominal  # Оставляем НОМИНАЛЬНЫЙ!
-                    head_selection_reason = (f"Требуемый {required_head_new:.0f} м > "
-                                             f"реального старого {current_pump_head_real:.0f} м "
-                                             f"(номинал {current_pump_head_nominal:.0f} м @ {freq_old_hz:.1f} Гц) - оставлен номинальный")
-                
-                # Случай 2: Разница между НОМИНАЛЬНЫМ старым и требуемым БОЛЬШЕ 300 м
-                elif (current_pump_head_nominal - required_head_new) > 300:
-                    pump_head_to_use = current_pump_head_nominal
-                    head_selection_reason = (f"Разница {current_pump_head_nominal - required_head_new:.0f} м > 300 м - "
-                                             f"оставлен номинальный {current_pump_head_nominal:.0f} м")
-                
-                # Случай 3: Все хорошо - используем требуемый напор
-                else:
-                    pump_head_to_use = required_head_new
-                    head_selection_reason = f"Используется требуемый напор {required_head_new:.0f} м"
-                
-                # Добавляем информацию для отладки
-                head_selection_reason += f" (старый реальный: {current_pump_head_real:.0f} м)"
-            else:
-                head_selection_reason = "Требуемый напор не рассчитан - оставлен исходный"
-            
-            # 5. Расчет числа ступеней нового насоса (ТЕПЕРЬ ИСПОЛЬЗУЕМ pump_head_to_use)
+            # 4. Расчет числа ступеней нового насоса
             if H_stage_new > 0:
-                num_stages_new = math.ceil(pump_head_to_use / H_stage_new)  # ← ЗДЕСЬ ИСПОЛЬЗУЕТСЯ
+                num_stages_new = math.ceil(pump_head_to_use / H_stage_new)
             else:
                 num_stages_new = 0
             
-            # 6. Расчет требуемой частоты для нового насоса
+            # 5. Расчет требуемой частоты для нового насоса
             if pump_head_to_use > 0:
                 freq_ratio = math.sqrt(required_head_new / pump_head_to_use)
                 required_freq_new = NOMINAL_FREQ * freq_ratio
@@ -12428,11 +12386,11 @@ def show_pump_conversion_system():
             else:
                 required_freq_new = NOMINAL_FREQ
             
-            # 7. Расчет развивающейся мощности нового насоса
+            # 6. Расчет развивающейся мощности нового насоса
             freq_ratio_new = required_freq_new / NOMINAL_FREQ
             power_developed_new = (num_stages_new * N_stage_new / 1000) * (freq_ratio_new ** 3)
             
-            # 8. Расчет времени работы в КПР режиме
+            # 7. Расчет времени работы в КПР режиме
             Q_developed_new = nominal_q_new * freq_ratio_new
             if Q_developed_new > 0:
                 work_hours_kpr = (Q_debit / Q_developed_new) * 24
@@ -12440,7 +12398,7 @@ def show_pump_conversion_system():
             else:
                 work_hours_kpr = 4
             
-            # 9. Энергопотребление нового насоса
+            # 8. Энергопотребление нового насоса
             energy_per_day_new = power_developed_new * work_hours_kpr
             
             # --- РАСЧЁТ ЭКОНОМИИ ---
@@ -12456,14 +12414,11 @@ def show_pump_conversion_system():
                 'Текущий насос': current_pump_mark,
                 'Текущий тип': current_pump_type,
                 'Текущий напор': current_pump_head_nominal,
-                'Текущая частота': freq_old_hz,  
-                'Текущий напор реальный': current_pump_head_real if 'current_pump_head_real' in locals() else None,  
+                'Текущая частота': freq_old_hz,
                 'Новый тип': new_pump_type,
                 'Новый напор': pump_head_to_use,
                 'Требуемый напор': required_head_new,
                 'Логика напора': head_selection_reason,
-                'Новый тип': new_pump_type,
-                'Новый напор': pump_head_to_use,  
                 'Qж, м³/сут': round(Q_debit, 1),
                 'Частота старого, Гц': round(freq_old_hz, 1),
                 'Мощность старого, кВт': round(power_developed_old, 2),
