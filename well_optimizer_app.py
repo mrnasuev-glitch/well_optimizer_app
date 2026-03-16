@@ -11465,55 +11465,94 @@ def show_kpr_potential_tab_corrected():
             # Экспорт результатов
             @st.cache_data(ttl=3600)
             def create_batch_excel_report():
+                """
+                Создает Excel отчет для пакетного расчета с безопасной обработкой колонок
+                """
                 _load_openpyxl()
                 output = BytesIO()
+                
+                # Определяем, какие данные у нас есть
+                batch_results = st.session_state.get('batch_results_advanced', [])
+                if not batch_results:
+                    # Если нет batch_results_advanced, пробуем другие возможные ключи
+                    batch_results = st.session_state.get('full_batch_results', [])
+                
+                if not batch_results:
+                    # Создаем пустой DataFrame для пустого отчета
+                    df = pd.DataFrame()
+                else:
+                    df = pd.DataFrame(batch_results)
+                
+                # Безопасно определяем название колонки с эффектом
+                effect_col = None
+                possible_effect_cols = [
+                    'Эффект (₽/сут)', 'Эффект, ₽/сут', 'Эффект ₽/сут', 
+                    'total_effect_per_day', 'economic_effect', 'Эффект'
+                ]
+                
+                for col in possible_effect_cols:
+                    if col in df.columns:
+                        effect_col = col
+                        break
                 
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
                     # Основные результаты
                     df.to_excel(writer, sheet_name='Все скважины', index=False)
                     
-                    # Результаты только с положительным эффектом
-                    positive_df = df[df['Эффект (₽/сут)'] > 0]
-                    if not positive_df.empty:
-                        positive_df.to_excel(writer, sheet_name='Положительные', index=False)
+                    # Результаты только с положительным эффектом (если есть колонка с эффектом)
+                    if effect_col is not None and effect_col in df.columns:
+                        try:
+                            positive_df = df[df[effect_col] > 0]
+                            if not positive_df.empty:
+                                positive_df.to_excel(writer, sheet_name='Положительные', index=False)
+                        except:
+                            # Если не удалось отфильтровать, пропускаем
+                            pass
                     
                     # Сводка
-                    summary = pd.DataFrame({
-                        'Показатель': [
-                            'Всего скважин', 
-                            'С положительным эффектом',
-                            'Процент положительных',
-                            'Сценарий A (+ эффект)',
-                            'Сценарий B (+ эффект)',
-                            'Оптимальные (+ эффект)',
-                            'Суммарный эффект (₽/сут) ТОЛЬКО +',
-                            'Суммарный эффект (₽/мес) ТОЛЬКО +',
-                            'Суммарный эффект (₽/год) ТОЛЬКО +',
-                            'Дата расчета',
-                            'ЦИТС'
-                        ],
-                        'Значение': [
-                            len(df),
-                            len(positive_df),
-                            f"{(len(positive_df)/len(df)*100):.1f}%" if len(df) > 0 else "0%",
-                            len(positive_df[positive_df['Сценарий'] == 'A']) if 'Сценарий' in positive_df.columns else 0,
-                            len(positive_df[positive_df['Сценарий'] == 'B']) if 'Сценарий' in positive_df.columns else 0,
-                            len(positive_df[(positive_df['Сценарий'] != 'A') & (positive_df['Сценарий'] != 'B') & (positive_df['Сценарий'] != 'Ошибка')]) if 'Сценарий' in positive_df.columns else 0,
-                            positive_df['Эффект (₽/сут)'].sum() if not positive_df.empty else 0,
-                            positive_df['Эффект (₽/сут)'].sum() * 30 if not positive_df.empty else 0,
-                            positive_df['Эффект (₽/сут)'].sum() * 365 if not positive_df.empty else 0,
-                            datetime.now().strftime("%Y-%m-%d %H:%M"),
-                            selected_cits
-                        ]
-                    })
-                    summary.to_excel(writer, sheet_name='Сводка', index=False)
+                    summary_data = []
+                    summary_data.append(['Показатель', 'Значение'])
+                    summary_data.append(['Всего скважин', len(df)])
                     
-                    # Экономический расчет
-                    if not positive_df.empty and 'Эффект (₽/сут)' in positive_df.columns:
-                        econ_df = positive_df.copy()
-                        econ_df['Эффект (₽/мес)'] = econ_df['Эффект (₽/сут)'] * 30
-                        econ_df['Эффект (₽/год)'] = econ_df['Эффект (₽/сут)'] * 365
-                        econ_df.to_excel(writer, sheet_name='Экономика_плюс', index=False)
+                    # Если есть колонка с эффектом, добавляем статистику по эффекту
+                    if effect_col is not None and effect_col in df.columns:
+                        try:
+                            positive_count = len(df[df[effect_col] > 0])
+                            summary_data.append(['С положительным эффектом', positive_count])
+                            summary_data.append(['Процент положительных', f"{(positive_count/len(df)*100):.1f}%" if len(df) > 0 else "0%"])
+                            
+                            # Сценарии
+                            scenario_a_count = len(df[df['Сценарий'] == 'A']) if 'Сценарий' in df.columns else 0
+                            scenario_b_count = len(df[df['Сценарий'] == 'B']) if 'Сценарий' in df.columns else 0
+                            
+                            summary_data.append(['Сценарий A (+ эффект)', scenario_a_count])
+                            summary_data.append(['Сценарий B (+ эффект)', scenario_b_count])
+                            
+                            # Суммарный эффект
+                            total_effect = df[df[effect_col] > 0][effect_col].sum() if positive_count > 0 else 0
+                            summary_data.append(['Суммарный эффект (₽/сут) ТОЛЬКО +', f"{total_effect:,.0f}"])
+                            summary_data.append(['Суммарный эффект (₽/мес) ТОЛЬКО +', f"{total_effect * 30:,.0f}"])
+                            summary_data.append(['Суммарный эффект (₽/год) ТОЛЬКО +', f"{total_effect * 365:,.0f}"])
+                        except:
+                            # Если ошибка при расчете статистики, пропускаем
+                            pass
+                    
+                    summary_data.append(['Дата расчета', datetime.now().strftime("%Y-%m-%d %H:%M")])
+                    summary_data.append(['ЦИТС', st.session_state.get('selected_cits', 'ЦИТС VQ-BAD')])
+                    
+                    summary_df = pd.DataFrame(summary_data[1:], columns=summary_data[0])
+                    summary_df.to_excel(writer, sheet_name='Сводка', index=False, header=False)
+                    
+                    # Экономический расчет (если есть колонка с эффектом)
+                    if effect_col is not None and effect_col in df.columns:
+                        try:
+                            positive_df = df[df[effect_col] > 0].copy()
+                            if not positive_df.empty:
+                                positive_df['Эффект (₽/мес)'] = positive_df[effect_col] * 30
+                                positive_df['Эффект (₽/год)'] = positive_df[effect_col] * 365
+                                positive_df.to_excel(writer, sheet_name='Экономика_плюс', index=False)
+                        except:
+                            pass
                 
                 return output.getvalue()
             
